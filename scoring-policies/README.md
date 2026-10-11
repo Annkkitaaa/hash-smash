@@ -107,9 +107,18 @@ python3 scripts/fill_scalar_rescore_plan.py \
 
 `--policy` is the complete definition described above. This differs from the
 backend preview's policy-reference JSON, which contains `id`, `sourceRef`,
-`definitionSha256`, and `scoreMetric`. The reference's ID, hash and metric must
-match the full definition exactly. Its `sourceRef` remains the operator's
-provenance reference and is preserved unchanged.
+`definitionSha256`, `scoreMetric`, `sourceCostModelId` and `timeUnit`. The reference's
+ID, hash, metric, source model and time unit must match the full definition exactly.
+Preview and locked apply also require every retained resource record to match
+that source model and unit. The policy's `sourceRef` is operator provenance,
+preserved unchanged; it is not an execution pin.
+
+The maintenance plan preserves every track's existing source fields. It has no
+`nextSourceRef` field or source-activation operation. Scalar GitHub Actions jobs
+execute the live branch tip. Publish and verify the approved scorer on that branch
+before applying the score migration, with submissions paused, jobs drained and
+the source held stable through the reviewed maintenance window. Updating a stored
+source reference alone would not select the scorer for future scalar submissions.
 
 The filler requires compatible v5 time and memory metrics and a consistent existing
 score. Original `scoreMetric: timeLog2` records must have `oldScore == timeLog2`

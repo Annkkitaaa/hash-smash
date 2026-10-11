@@ -42,9 +42,10 @@ def fixture():
 
     plan = {
         "version": 1, "benchmarkId": identifier(1), "challengeId": identifier(10),
-        "snapshotSha256": "f" * 64, "nextSourceRef": "7" * 40,
+        "snapshotSha256": "f" * 64,
         "policy": {"id": marker["scoringPolicyId"], "definitionSha256": marker["scoringPolicySha256"],
-                   "scoreMetric": marker["scoreMetric"], "sourceRef": "organizer fixture definition"},
+                   "scoreMetric": marker["scoreMetric"], "sourceRef": "organizer fixture definition",
+                   "sourceCostModelId": policy["sourceCostModelId"], "timeUnit": policy["timeUnit"]},
         "tracks": [
             {"benchmarkId": identifier(1), "description": "Original organizer fixture description.",
              "source": {"url": "https://example.test/organizer-fixture", "ref": "1" * 40, "branch": "main", "rootDir": None},
@@ -139,8 +140,8 @@ class ScalarRescorePlanTests(unittest.TestCase):
         entry["oldScore"] = scalar_score(entry["metrics"], policy)
         self.assertEqual(fill_plan(plan, policy)["tracks"][0]["baseline"]["newScore"], entry["oldScore"])
 
-    def test_policy_marker_must_match_definition_in_all_three_fields(self):
-        for field in ("id", "definitionSha256", "scoreMetric"):
+    def test_policy_reference_must_match_definition_and_resource_units(self):
+        for field in ("id", "definitionSha256", "scoreMetric", "sourceCostModelId", "timeUnit"):
             plan, policy = fixture()
             plan["policy"][field] = "wrong"
             with self.subTest(field=field), self.assertRaisesRegex(VerificationError, "match --policy"):
@@ -171,8 +172,10 @@ class ScalarRescorePlanTests(unittest.TestCase):
             lambda p: p.update(version=2), lambda p: p.update(version=True),
             lambda p: p.update(unknown="not a backend field"), lambda p: p.update(tracks=[]),
             lambda p: p.update(snapshotSha256="wrong"), lambda p: p.update(nextSourceRef="main"),
+            lambda p: p.update(nextSourceRef="7" * 40),
             lambda p: p.update(challengeId=None), lambda p: p.update(benchmarkId="not a UUID"),
-            lambda p: p["policy"].pop("sourceRef"), lambda p: p["tracks"][0].pop("currentBest"),
+            lambda p: p["policy"].pop("sourceRef"), lambda p: p["policy"].pop("sourceCostModelId"),
+            lambda p: p["policy"].pop("timeUnit"), lambda p: p["tracks"][0].pop("currentBest"),
             lambda p: p["tracks"][0]["source"].pop("branch"),
             lambda p: p["tracks"][0].pop("description"),
             lambda p: p["tracks"][0].update(description=None),
@@ -195,7 +198,6 @@ class ScalarRescorePlanTests(unittest.TestCase):
         plan["challengeId"] = None
         plan["tracks"] = plan["tracks"][:1]
         plan["tracks"][0]["submissions"] = []
-        del plan["nextSourceRef"]
         self.assertEqual(len(entries(fill_plan(plan, policy))), 2)
 
 

@@ -96,20 +96,21 @@ def fill_plan(plan: Any, policy: Any, existing_policies=()) -> dict:
         definitions[(identifier, digest)] = item
 
     _object(plan, {"version", "benchmarkId", "challengeId", "snapshotSha256", "policy", "tracks"},
-            "plan", {"nextSourceRef"})
+            "plan")
     if type(plan["version"]) is not int or plan["version"] != 1:
         raise VerificationError("plan: only Yukon version-1 previews are supported")
     _identifier(plan["benchmarkId"], "plan.benchmarkId")
     if plan["challengeId"] is not None:
         _identifier(plan["challengeId"], "plan.challengeId")
     _hash(plan["snapshotSha256"], "plan.snapshotSha256")
-    if "nextSourceRef" in plan:
-        _hash(plan["nextSourceRef"], "plan.nextSourceRef", 40)
-    _object(plan["policy"], {"id", "sourceRef", "definitionSha256", "scoreMetric"}, "plan.policy")
+    _object(plan["policy"], {"id", "sourceRef", "definitionSha256", "scoreMetric",
+                             "sourceCostModelId", "timeUnit"}, "plan.policy")
     if (plan["policy"]["id"] != marker["scoringPolicyId"]
             or plan["policy"]["definitionSha256"] != marker["scoringPolicySha256"]
-            or plan["policy"]["scoreMetric"] != marker["scoreMetric"]):
-        raise VerificationError("plan.policy: ID, definition hash and scoreMetric must match --policy exactly")
+            or plan["policy"]["scoreMetric"] != marker["scoreMetric"]
+            or plan["policy"]["sourceCostModelId"] != definition["sourceCostModelId"]
+            or plan["policy"]["timeUnit"] != definition["timeUnit"]):
+        raise VerificationError("plan.policy: ID, definition hash, scoreMetric and resource units must match --policy exactly")
     if not isinstance(plan["policy"]["sourceRef"], str) or not plan["policy"]["sourceRef"].strip():
         raise VerificationError("plan.policy.sourceRef: missing operator provenance")
     if not isinstance(plan["tracks"], list) or not plan["tracks"]:
