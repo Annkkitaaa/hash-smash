@@ -123,7 +123,11 @@ backend preview's policy-reference JSON, which contains `id`, `sourceRef`,
 `definitionSha256`, `scoreMetric`, `sourceCostModelId` and `timeUnit`. The reference's
 ID, hash, metric, source model and time unit must match the full definition exactly.
 Preview and locked apply also require every retained resource record to match
-that source model and unit. The policy's `sourceRef` is operator provenance,
+that source model and unit. The backend independently verifies the fixed approved
+formula `timeLog2 + max(0, memoryLog2Bytes - 20)`: retained time/memory exponents
+must be finite, nonnegative numbers, and every proposed `newScore` must be finite
+and exactly equal to that result. This check supports only the approved policy.
+The policy's `sourceRef` is operator provenance,
 preserved unchanged; it is not an execution pin.
 
 The maintenance plan preserves every track's existing source fields. It has no
@@ -190,6 +194,7 @@ explicit mathematical definition hash uses the LF described above.
 
 Run the backend dry-run in the maintained environment after filling, review its
 exact result and approval hash, and apply in production only through the separate
-authorized operator procedure. Development rehearsal stops at preview/dry-run.
+authorized operator procedure. The backend rejects development apply even with a
+matching approval hash; development preview/dry-run remain available.
 If state changed, obtain a fresh preview and fill a new file.
 This command has no DB connection, source activation, rejudging or apply operation.
