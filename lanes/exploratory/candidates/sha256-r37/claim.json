@@ -4,21 +4,51 @@
   "target_profile": "sha256-r37-prefix-v1",
   "attack_class": "ordinary-collision",
   "rounds": 37,
+  "lane": "exploratory",
   "claim": {
-    "time_log2": 132,
+    "time_log2": 125.1,
     "time_unit": "target-compressions",
-    "memory_log2_bytes": 136,
-    "preprocessing_log2": 125,
+    "memory_log2_bytes": 146,
+    "preprocessing_log2": 28,
     "success_probability": 0.39,
     "nonuniform_advice_log2_bytes": 0
   },
   "restrictions": [
-    "Samples exactly 2^128 independent uniformly random 48-byte complete messages with replacement; each hashes to the full 256-bit output from the standard fixed IV using one padded 37-round compression.",
-    "Classical 256-bit probabilistic word RAM under collision-frontier-v5, C=2644; no random-oracle, output-balance, PRNG or differential heuristic.",
-    "Worst-case total work and peak memory upper bounds; no witness, executed full search, novelty, nominal-reference improvement or qualification is asserted."
+    "Run coins S0,S1 (256-bit) and table tag T drawn once; group prefix P_g = Trunc_52(H(S0||BE104(g)||S1)) with one charged target compression per group (proof.md §2, §9).",
+    "Messages m(g,u)=P_g||BE24(u), 55 bytes, one block; N=2^128 samples in global cid order.",
+    "Eight-message SWAR batches share P_g; rounds 0..12 once; single W_0..W_12 parse; measured batch word ops 2723 plus 8 sequential 9-op table probes (72 ops) locked in trial 0.",
+    "Table key uses digest 144-bit prefix XOR run tag T; sparse-set Lemma 2. On hit, rebuild both messages from (S0,S1,cid) via Lemma 1; two scalar H verifications; at most 2^113 + 2^40 + 1 cold verifications.",
+    "Score-critical H1-table-rf (table tails only) and H2-eight-lane-swar. Generic search."
   ],
   "baseline_improved": "sha256-r37-nominal-v2",
+  "heuristics": [
+    {
+      "id": "H1-table-rf",
+      "role": "score-critical",
+      "statement": "Over fresh (S0,S1,T) and the keyed sparse-set probes, the probability of table failure from (F2) overwrite before verifying a colliding key, (F3) more than 2^113 false 144-bit key matches, or (F4) more than 2^40 equal-key unequal-digest verifications, exceeds the uniform-model tail by at most 0.004 (so combined with §5 birthday success remains > 0.39).",
+      "scope": "Deterministic prefixes from (S0,S1,g), tagged keys κ(H), 140-bit sparse addresses, global cid order with sequential probes inside each batch.",
+      "extrapolation": "From cigts-mask-spread (32 messages, 16-bit mask) and cigts-mask-single-group (512 consecutive u) to N=2^128 and 144-bit keys.",
+      "evidence_ids": [
+        "experiment:cigts-mask-spread",
+        "experiment:cigts-mask-single-group",
+        "proof:5",
+        "proof:7"
+      ],
+      "limitations": "Mask experiments do not observe full collisions or 144-bit saturation."
+    },
+    {
+      "id": "H2-eight-lane-swar",
+      "role": "score-critical",
+      "statement": "For any 52-byte prefix P_g and eight 24-bit values u, the SWAR batch in proof.md §6–7 equals eight serial target compressions of P_g||u.",
+      "scope": "Single-block 55-byte messages; eight 32-bit lanes; shared W_0..W_12.",
+      "extrapolation": "Trial 0 checks eight diverse u and batch_ops=2723.",
+      "evidence_ids": [
+        "proof:6-7",
+        "experiment:cigts-mask-spread"
+      ],
+      "limitations": "Not exhaustive over all u; mis-implementation refutes."
+    }
+  ],
   "certificate_manifest": "certificates/manifest.json",
-  "lane": "exploratory",
-  "heuristics": []
+  "experiment_manifest": "experiments/manifest.json"
 }

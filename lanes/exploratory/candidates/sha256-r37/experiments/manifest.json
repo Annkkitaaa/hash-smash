@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "experiments": [
+    {
+      "id": "cigts-mask-spread",
+      "kind": "python-message-pairs-v1",
+      "scope": "Exact sha256-r37-prefix-v1 complete hash on 55-byte single-block messages prefix||u (52+3 bytes). Per organizer seed a 52-byte prefix; u runs over 0..31 (32 messages). 16-bit digest-xor mask on low 16 bits of words H3 and H7. Trial 0 runs one counted eight-lane SWAR batch (2723 word ops) and compares all eight digests to the inlined scalar reference on eight diverse u values. All 256 trials returned.",
+      "hypothesis": "Returned mask matches are genuine on the trusted digest function. Mask collision rate at N_t=32 and w=16 is consistent with the independent-uniform pair model used in heuristic H1 (supporting evidence only).",
+      "program": "experiments/grouped_mask_probe.py",
+      "event": {
+        "kind": "digest-xor-mask",
+        "mask_hex": "0000000000000000000000000000ffff0000000000000000000000000000ffff",
+        "expected_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    },
+    {
+      "id": "cigts-mask-single-group",
+      "kind": "python-message-pairs-v1",
+      "scope": "Same target and message shape; one prefix per seed with u=0..511 (512 consecutive inner values). Same 16-bit mask on H3/H7 low halves. Trial 0: eight-lane SWAR batch op lock 2723 and scalar digest cross-check on eight diverse u values as in cigts-mask-spread.",
+      "hypothesis": "Within-group consecutive u values do not show excess or deficit of masked agreements relative to the uniform random-function model at w=16.",
+      "program": "experiments/grouped_mask_probe.py",
+      "event": {
+        "kind": "digest-xor-mask",
+        "mask_hex": "0000000000000000000000000000aaaa0000000000000000000000000000aaaa",
+        "expected_hex": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    }
+  ]
+}
