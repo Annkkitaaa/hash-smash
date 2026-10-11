@@ -4,21 +4,52 @@
   "target_profile": "sha256-r37-prefix-v1",
   "attack_class": "ordinary-collision",
   "rounds": 37,
+  "lane": "exploratory",
   "claim": {
-    "time_log2": 132,
+    "time_log2": 125.1,
     "time_unit": "target-compressions",
-    "memory_log2_bytes": 136,
-    "preprocessing_log2": 125,
+    "memory_log2_bytes": 146,
+    "preprocessing_log2": 28,
     "success_probability": 0.39,
     "nonuniform_advice_log2_bytes": 0
   },
   "restrictions": [
-    "Samples exactly 2^128 independent uniformly random 48-byte complete messages with replacement; each hashes to the full 256-bit output from the standard fixed IV using one padded 37-round compression.",
-    "Classical 256-bit probabilistic word RAM under collision-frontier-v5, C=2644; no random-oracle, output-balance, PRNG or differential heuristic.",
-    "Worst-case total work and peak memory upper bounds; no witness, executed full search, novelty, nominal-reference improvement or qualification is asserted."
+    "Messages are 55 bytes: 52-byte group prefix P || 3-byte big-endian u (24 bits), one padded block, standard IV, 37-round complete hash.",
+    "2^104 independent uniform groups; each enumerates u = 0..2^24-1. N = 2^128 messages, one pass.",
+    "Global index n=(g<<24)|u stores (g,u) for every candidate; both messages are reconstructed from P_g and u on verification (proof.md Lemma 1).",
+    "Eight messages per batch share P; rounds 0..12 run once per batch; rounds 13..36 run on an eight-lane 32-bit SWAR 256-bit word (proof.md Section 7). Measured batch word-op count 2736 including table step; trial 0 locks this count and eight-lane digests against the scalar reference.",
+    "144-bit key K(H) from digest bytes 0..17; uninitialized sparse-set table (proof.md Lemma 2). On hit, two scalar reference compressions verify equality; at most 2^113 + 2^40 + 1 cold verifications charged.",
+    "Score-critical heuristics H1 (table/tail randomness) and H2 (SWAR equivalence). Generic search, not a differential attack."
   ],
   "baseline_improved": "sha256-r37-nominal-v2",
+  "heuristics": [
+    {
+      "id": "H1-table-rf",
+      "role": "score-critical",
+      "statement": "Over fresh group prefixes and table tag, the probability of failure from (i) no digest collision among N samples, (ii) F2 overwrite before second probe of a colliding key, or (iii) more than 2^113 false 144-bit key matches, exceeds the uniform-model value 0.606 by at most 0.004.",
+      "scope": "The declared grouped message family, full 256-bit digest, 144-bit key prefix, sparse-set table on key bits 8..143.",
+      "extrapolation": "From organizer experiments cigts-mask-spread (32 messages, 16-bit mask on H3/H7) and cigts-mask-single-group (512 consecutive u, alternate mask) to N = 2^128 and 144-bit keys.",
+      "evidence_ids": [
+        "experiment:cigts-mask-spread",
+        "experiment:cigts-mask-single-group",
+        "proof:6",
+        "proof:9-10"
+      ],
+      "limitations": "Mask tests do not observe full digest collisions or 144-bit key saturation. H1 is not proved from experiments alone."
+    },
+    {
+      "id": "H2-eight-lane-swar",
+      "role": "score-critical",
+      "statement": "For any fixed 52-byte prefix and any eight 24-bit values u, the eight-lane program of proof.md Section 7 produces the same complete digests as eight serial 37-round compressions of messages P||u.",
+      "scope": "Single-block 55-byte messages sharing W0..W12; eight 32-bit lanes packed in one 256-bit word; parallel schedule extension for W13-dependent words.",
+      "extrapolation": "Trial 0 executes the counted batch on eight diverse u values and compares every lane to the scalar reference; not all 2^24 u per group.",
+      "evidence_ids": [
+        "proof:7-8",
+        "experiment:cigts-mask-spread"
+      ],
+      "limitations": "Full domain equivalence is argued in proof, not exhaustively executed. Mis-implementation would refute the claim."
+    }
+  ],
   "certificate_manifest": "certificates/manifest.json",
-  "lane": "exploratory",
-  "heuristics": []
+  "experiment_manifest": "experiments/manifest.json"
 }
