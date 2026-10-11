@@ -92,16 +92,29 @@ The original v5 cost-model file and resource accounting stay unchanged.
 cover the floor boundary, fractional exponents and high memory. They are artificial
 arithmetic fixtures, not qualified attacks or historical artifacts.
 
-## Offline Yukon plan filling
+## One-time offline Yukon plan filling
+
+This operator workflow is limited to migrating the original HashSmash scalar
+challenge with the approved `hashsmash-scalar-tm-v1` definition and hash above.
+The backend rejects standalone benchmarks, other challenges and other policies.
+Its allowed challenge IDs are:
+
+- Production: `24e42a9c-0c09-4876-93c9-f59a1038c0e9`.
+- Development: `f7921907-1e83-4b42-93b4-4d4a4dc2607c` (preview/dry-run rehearsal only).
+
+The filler and backend maintenance commands can be retired after the verified
+migration. The normal scorer, pure resource/policy helpers, policy definition,
+UI decoding and review workflow remain in use. Artificial definitions supported
+by the arithmetic helper do not expand the maintenance workflow's scope.
 
 The backend's `scalar-rescore preview` produces a frozen plan with `newScore: null`
-for each baseline, current incumbent and scored submission. Once the operator has
-an explicit policy definition, fill all proposed values without database access:
+for each baseline, current incumbent and scored submission. Fill all proposed
+values with the approved policy definition without database access:
 
 ```sh
 python3 scripts/fill_scalar_rescore_plan.py \
   --plan /path/to/frozen-preview.json \
-  --policy /path/to/scalar-policy-definition.json \
+  --policy scoring-policies/hashsmash-scalar-tm-v1.json \
   --out /path/to/new-filled-plan.json
 ```
 
@@ -133,8 +146,19 @@ revalidated or replaced by the filler.
 Every proposal must initially be null. Incomplete entries, unknown structural
 fields, duplicate identities, nonfinite inputs or results and a mismatched policy
 stop without emitting a plan. The current incumbent is calculated from its own
-record; a better historical submission never replaces it. The output preserves
-all input identities, row order, the supplied metrics projection, source references and frozen hashes,
+record; the filler never selects a replacement. After frozen-plan validation,
+backend dry-run and apply require that proposed incumbent to equal the best
+proposed score among the baseline and eligible published submissions under DB
+locks (the minimum for HashSmash, with ties allowed). Eligible rows must be
+nondeleted, accepted, promoted, have a nonnull promoted source reference and a
+nonnull official score. Eligibility comes only from locked DB rows, never plan
+metrics or caller-supplied IDs. A mismatch stops maintenance without selecting a
+winner or rewriting publication history; it requires a separately reviewed
+resolution. The null-valued preview and offline filler cannot establish this
+invariant.
+
+The output preserves all input identities, row order, the supplied metrics
+projection, source references and frozen hashes,
 changing only each `newScore`. Each track's required `description` is the exact
 frozen existing text. An optional operator-authored `nextDescription` is preserved
 exactly, including whitespace; the filler never generates, trims or applies it.
@@ -165,6 +189,7 @@ The approval plan hash uses Yukon's sorted JavaScript JSON without LF; the
 explicit mathematical definition hash uses the LF described above.
 
 Run the backend dry-run in the maintained environment after filling, review its
-exact result and approval hash, and apply only through the separate authorized
-operator procedure. If state changed, obtain a fresh preview and fill a new file.
+exact result and approval hash, and apply in production only through the separate
+authorized operator procedure. Development rehearsal stops at preview/dry-run.
+If state changed, obtain a fresh preview and fill a new file.
 This command has no DB connection, source activation, rejudging or apply operation.
