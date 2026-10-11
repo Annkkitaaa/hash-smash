@@ -4,21 +4,50 @@
   "target_profile": "sha256-r37-prefix-v1",
   "attack_class": "ordinary-collision",
   "rounds": 37,
+  "lane": "exploratory",
   "claim": {
-    "time_log2": 132,
+    "time_log2": 125.1,
     "time_unit": "target-compressions",
-    "memory_log2_bytes": 136,
-    "preprocessing_log2": 125,
+    "memory_log2_bytes": 146,
+    "preprocessing_log2": 28,
     "success_probability": 0.39,
     "nonuniform_advice_log2_bytes": 0
   },
   "restrictions": [
-    "Samples exactly 2^128 independent uniformly random 48-byte complete messages with replacement; each hashes to the full 256-bit output from the standard fixed IV using one padded 37-round compression.",
-    "Classical 256-bit probabilistic word RAM under collision-frontier-v5, C=2644; no random-oracle, output-balance, PRNG or differential heuristic.",
-    "Worst-case total work and peak memory upper bounds; no witness, executed full search, novelty, nominal-reference improvement or qualification is asserted."
+    "Messages are 55 bytes: 52-byte group prefix P || 3-byte big-endian u (24 bits), one padded block, standard IV, 37-round complete hash.",
+    "2^104 independent uniform groups; each enumerates u = 0..2^24-1. N = 2^128 messages, one pass.",
+    "Seven messages per batch share P; rounds 0..12 run once per batch; rounds 13..36 run on a seven-lane 36-bit-slot SWAR word (proof.md Section 5). Conservative batch word-op count 2289 including table step; H2 asserts lane-wise equivalence to seven serial compressions.",
+    "140-bit table key is digest bytes 0..17 (144 bits) right-aligned in a 256-bit word; uninitialized sparse-set table with per-run tag (Lemma 4). Confirm with two reference compressions; at most 2^113 + 2^40 + 1 cold verifications charged.",
+    "Score-critical heuristics H1 (table/tail randomness) and H2 (SWAR equivalence). Generic search, not a differential attack."
   ],
   "baseline_improved": "sha256-r37-nominal-v2",
+  "heuristics": [
+    {
+      "id": "H1-table-rf",
+      "role": "score-critical",
+      "statement": "Over fresh group prefixes and table tag, the probability of failure from (i) no digest collision among N samples, (ii) F2 overwrite before second probe of a colliding key, or (iii) more than 2^113 false 144-bit key matches, exceeds the uniform-model value 0.606 by at most 0.004.",
+      "scope": "The declared grouped message family, full 256-bit digest, 144-bit key prefix, sparse-set table on key bits 8..143.",
+      "extrapolation": "From organizer experiments cigts-mask-spread (32 messages, 16-bit mask on H3/H7) and cigts-mask-single-group (512 consecutive u, alternate mask) to N = 2^128 and 144-bit keys.",
+      "evidence_ids": [
+        "experiment:cigts-mask-spread",
+        "experiment:cigts-mask-single-group",
+        "proof:9-11"
+      ],
+      "limitations": "Mask tests do not observe full digest collisions or 144-bit key saturation. H1 is not proved from experiments alone."
+    },
+    {
+      "id": "H2-seven-lane-swar",
+      "role": "score-critical",
+      "statement": "For any fixed 52-byte prefix and any seven 24-bit values u, the seven-lane program of proof.md Section 5 produces the same complete digests as seven serial 37-round compressions of messages P||u.",
+      "scope": "Single-block 55-byte messages sharing W0..W12; lanes isolated in 36-bit slots; schedule extension for W13-dependent words as specified.",
+      "extrapolation": "Static straight-line program; trial 0 of experiments checks reference digests on three u only, not all 2^24 values per group.",
+      "evidence_ids": [
+        "proof:5-8",
+        "experiment:cigts-mask-spread"
+      ],
+      "limitations": "Full domain equivalence is argued in proof, not exhaustively executed. Mis-implementation would refute the claim."
+    }
+  ],
   "certificate_manifest": "certificates/manifest.json",
-  "lane": "exploratory",
-  "heuristics": []
+  "experiment_manifest": "experiments/manifest.json"
 }
