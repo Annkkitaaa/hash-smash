@@ -199,6 +199,26 @@ class PoseidonPrefixRoundTests(unittest.TestCase):
         self.assertTrue(poseidon.is_full_round(1))
 
 
+class PoseidonReferenceCostTests(unittest.TestCase):
+    def test_instrumented_field_operations_back_the_published_prices(self):
+        from scripts.reference_operation_costs import poseidon_field_operations
+
+        # Per full round: 3 constant additions, 3 S-boxes of 3 multiplications
+        # each, and an MDS row cost of 3 multiplications plus 2 additions.
+        self.assertEqual(poseidon_field_operations(1), {"mul": 18, "add": 9})
+        self.assertEqual(poseidon_field_operations(2), {"mul": 36, "add": 18})
+        # Cross-check at the deployed round count: 240 S-box and 576 MDS
+        # multiplications, and 9 additions in each of 64 rounds.
+        self.assertEqual(poseidon_field_operations(64), {"mul": 816, "add": 576})
+
+    def test_published_prices_are_the_sum_of_both_field_operations(self):
+        from scripts.reference_operation_costs import reference_costs
+
+        prices = reference_costs()
+        self.assertEqual(prices["poseidon-r1"], 27)
+        self.assertEqual(prices["poseidon-r2"], 54)
+
+
 class PoseidonNegativeControlTests(unittest.TestCase):
     """A wrong constant, capacity or round count must break the official vectors."""
 

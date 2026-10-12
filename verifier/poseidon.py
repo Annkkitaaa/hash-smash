@@ -276,6 +276,29 @@ def _sbox(value: int) -> int:
     return fourth * value % MODULUS
 
 
+def _apply_mds(state):
+    """Multiply the state by the deployed MDS matrix."""
+    result = []
+    for row in MDS:
+        # An explicit accumulator charges WIDTH multiplications and WIDTH-1
+        # additions per row, with no addition of a zero initial value.
+        total = row[0] * state[0] % MODULUS
+        for index in range(1, WIDTH):
+            total = (total + row[index] * state[index]) % MODULUS
+        result.append(total)
+    return result
+
+
+def apply_round(state, constants, *, full: bool):
+    """One deployed round: add constants, apply the S-box, then the MDS matrix."""
+    if full:
+        current = [_sbox((state[i] + constants[i]) % MODULUS) for i in range(WIDTH)]
+    else:
+        current = [(state[i] + constants[i]) % MODULUS for i in range(WIDTH)]
+        current[0] = _sbox(current[0])
+    return _apply_mds(current)
+
+
 def permutation(state, *, rounds: int = TOTAL_ROUNDS) -> list[int]:
     """Apply a pinned prefix of the deployed permutation to three elements."""
     _validate_rounds(rounds)
@@ -284,14 +307,7 @@ def permutation(state, *, rounds: int = TOTAL_ROUNDS) -> list[int]:
         raise ValueError("state must be three canonical Pallas base field elements")
     current = list(state)
     for index in range(rounds):
-        constants = ROUND_CONSTANTS[index]
-        if is_full_round(index):
-            current = [_sbox((current[i] + constants[i]) % MODULUS) for i in range(WIDTH)]
-        else:
-            current = [(current[i] + constants[i]) % MODULUS for i in range(WIDTH)]
-            current[0] = _sbox(current[0])
-        current = [sum(MDS[i][j] * current[j] for j in range(WIDTH)) % MODULUS
-                   for i in range(WIDTH)]
+        current = apply_round(current, ROUND_CONSTANTS[index], full=is_full_round(index))
     return current
 
 

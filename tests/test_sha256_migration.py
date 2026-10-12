@@ -142,7 +142,8 @@ class Sha256MigrationTests(unittest.TestCase):
                         "sha3-256-r6": 1626, "keccak800-r5": 1355, "keccak800-r6": 1626,
                         "blake3-r1": 222, "blake3-r2": 430}
         prices = reference_costs()
-        self.assertEqual(prices, {**expected_old, "sha256-r37": 2644, "sha256-r38": 2728})
+        self.assertEqual(prices, {**expected_old, "sha256-r37": 2644, "sha256-r38": 2728,
+                                  "poseidon-r1": 27, "poseidon-r2": 54})
         for track_id in NEW_IDS:
             track = registry.get_frontier_track(track_id)
             self.assertEqual(track.benchmark()["cost_model"]["operation_weights"],
