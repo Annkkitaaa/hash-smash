@@ -199,6 +199,72 @@ class PoseidonPrefixRoundTests(unittest.TestCase):
         self.assertTrue(poseidon.is_full_round(1))
 
 
+class PoseidonTrackTests(unittest.TestCase):
+    def tracks(self):
+        from verifier.frontier_tracks import get_frontier_track
+
+        return [get_frontier_track(f"poseidon-r{rounds}-exploratory") for rounds in (1, 2)]
+
+    def test_both_targets_resolve_with_the_expected_identity(self):
+        for rounds, track in zip((1, 2), self.tracks()):
+            with self.subTest(rounds=rounds):
+                self.assertEqual(track.target_id, f"poseidon-r{rounds}")
+                self.assertEqual(track.profile_id, f"poseidon-r{rounds}-prefix-v1")
+                self.assertEqual(track.reference_id, f"poseidon-r{rounds}-nominal-v2")
+                self.assertEqual(track.algorithm, "poseidon")
+                self.assertEqual(track.rounds, rounds)
+                self.assertEqual(track.lane, "exploratory")
+                self.assertEqual(track.selection_status, "organizer_selected")
+                self.assertFalse(track.retired)
+
+    def test_exploration_pair_asserts_no_first_unbroken_boundary(self):
+        roles = [track.boundary_role for track in self.tracks()]
+        self.assertEqual(roles, ["lower-exploration", "upper-exploration"])
+
+    def test_nominal_reference_is_the_field_exponent_not_half_the_encoding(self):
+        for track in self.tracks():
+            with self.subTest(track=track.id):
+                self.assertEqual(track.digest_bits, 256)
+                self.assertEqual(track.nominal_security_bits, 127)
+                self.assertEqual(track.nominal_score, 127.0)
+                # The draft template must agree with the published reference.
+                self.assertEqual(track.draft_claim()["claim"]["time_log2"], 127.0)
+                frontier = track.benchmark()["frontier"]
+                self.assertEqual(frontier["nominal_collision_security_bits"], 127)
+                self.assertEqual(frontier["score"], 127.0)
+                self.assertFalse(frontier["is_qualified_baseline"])
+
+    def test_cost_weights_use_the_published_field_operation_price(self):
+        for expected, track in zip((27, 54), self.tracks()):
+            with self.subTest(track=track.id):
+                weights = track.benchmark()["cost_model"]["operation_weights"]
+                self.assertEqual(weights, {"target_compression": 1.0, "word_operation": 1 / expected})
+
+    def test_no_rigorous_poseidon_lane_exists(self):
+        from verifier.errors import VerificationError
+        from verifier.frontier_tracks import frontier_tracks, get_frontier_track
+
+        poseidon_tracks = [t.id for t in frontier_tracks() if t.algorithm == "poseidon"]
+        self.assertEqual(poseidon_tracks, ["poseidon-r1-exploratory", "poseidon-r2-exploratory"])
+        for undefined in ("poseidon-r1-rigorous", "poseidon-r2-rigorous", "poseidon-r8-exploratory"):
+            with self.subTest(undefined=undefined), self.assertRaises(VerificationError):
+                get_frontier_track(undefined)
+
+    def test_profile_round_selection_states_the_prefix_convention(self):
+        from verifier.io import load_json_bytes
+
+        for track in self.tracks():
+            profile = load_json_bytes(track.profile_path.read_bytes(), str(track.profile_path))
+            with self.subTest(track=track.id):
+                self.assertEqual(profile["digest_bits"], 256)
+                self.assertEqual(profile["rounds"], track.rounds)
+                self.assertEqual(profile["full_rounds"], 64)
+                self.assertIn("R_F=8/R_P=56", profile["round_selection"])
+                self.assertIn("64 bytes", profile["message_domain"])
+                self.assertIn("x + p", profile["message_domain"])
+                self.assertEqual(profile["reference_implementation"], "verifier/poseidon.py:poseidon")
+
+
 class PoseidonReferenceCostTests(unittest.TestCase):
     def test_instrumented_field_operations_back_the_published_prices(self):
         from scripts.reference_operation_costs import poseidon_field_operations

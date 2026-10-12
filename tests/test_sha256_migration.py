@@ -73,8 +73,8 @@ def independent_sha256(message, rounds):
 class Sha256MigrationTests(unittest.TestCase):
     def test_only_two_new_lanes_and_four_preserved_historical_identities(self):
         tracks = registry.frontier_tracks()
-        self.assertEqual(len(tracks), 26)
-        self.assertEqual(len(registry.frontier_tracks(include_retired=False)), 22)
+        self.assertEqual(len(tracks), 28)
+        self.assertEqual(len(registry.frontier_tracks(include_retired=False)), 24)
         self.assertEqual({t.id for t in tracks if t.retired}, OLD_IDS)
         active = {t.id for t in import_tracks()}
         self.assertEqual(active & {t.id for t in tracks if t.algorithm == "sha256"}, NEW_IDS | {f"sha256-r{r}-exploratory" for r in (31, 32)})
@@ -101,15 +101,16 @@ class Sha256MigrationTests(unittest.TestCase):
 
     def test_current_plans_exclude_history_and_unassigned_rigorous_lanes(self):
         status = validate_configuration()
-        self.assertEqual(status, {"planned_tracks": 26, "runnable_tracks": 26,
-                                 "retired_tracks": 4, "pending_tracks": 4,
+        self.assertEqual(status, {"planned_tracks": 24, "runnable_tracks": 28,
+                                 "retired_tracks": 4, "pending_tracks": 0,
                                  "import_tracks": 8, "yukon_challenges": 1})
         slots = registry.planned_slots()
-        self.assertEqual({s["family"] for s in slots if s["rounds"] is None}, {"poseidon"})
+        self.assertEqual({s["family"] for s in slots if s["rounds"] is None}, set())
         sha_slots = [s for s in slots if s["family"] == "sha256"]
         self.assertEqual([(s["rounds"], s["lane"]) for s in sha_slots], [(37, "exploratory"), (38, "exploratory")])
-        with self.assertRaisesRegex(VerificationError, "unresolved"):
-            validate_configuration(require_complete=True)
+        # Every slot now has a definition, so the completeness gate no longer
+        # rejects the roster. It still asserts nothing about qualification.
+        validate_configuration(require_complete=True)
 
     def test_catalog_rejects_malformed_lanes_and_history(self):
         base = registry.catalog()
@@ -221,7 +222,7 @@ class Sha256MigrationTests(unittest.TestCase):
 
     def test_transitive_shared_file_changes_remain_bound_for_all_existing_lanes(self):
         tracks = [t for t in registry.frontier_tracks() if t.id not in NEW_IDS]
-        self.assertEqual(len(tracks), 24)
+        self.assertEqual(len(tracks), 26)
         originals = {t.id: t.config_sha256() for t in tracks}
         read_bytes = Path.read_bytes
         for relative in ("verifier/frontier_tracks.py", "schemas/claim-frontier-v3.schema.json",
