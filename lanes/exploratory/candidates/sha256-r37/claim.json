@@ -5,20 +5,32 @@
   "attack_class": "ordinary-collision",
   "rounds": 37,
   "claim": {
-    "time_log2": 132,
+    "time_log2": 129.5,
     "time_unit": "target-compressions",
-    "memory_log2_bytes": 136,
-    "preprocessing_log2": 125,
+    "memory_log2_bytes": 130,
+    "preprocessing_log2": 120,
     "success_probability": 0.39,
     "nonuniform_advice_log2_bytes": 0
   },
   "restrictions": [
-    "Samples exactly 2^128 independent uniformly random 48-byte complete messages with replacement; each hashes to the full 256-bit output from the standard fixed IV using one padded 37-round compression.",
-    "Classical 256-bit probabilistic word RAM under collision-frontier-v5, C=2644; no random-oracle, output-balance, PRNG or differential heuristic.",
-    "Worst-case total work and peak memory upper bounds; no witness, executed full search, novelty, nominal-reference improvement or qualification is asserted."
+    "Samples 2^128 random 48-byte messages; uses expected-case hash table for collision detection under random oracle heuristic for the hash output.",
+    "Classical 256-bit word RAM, C=2644. Success probability >0.39 over the sampling.",
+    "Heuristic: assumes near-uniform output distribution for collision probability analysis; not distribution-free."
   ],
   "baseline_improved": "sha256-r37-nominal-v2",
   "certificate_manifest": "certificates/manifest.json",
   "lane": "exploratory",
-  "heuristics": []
+  "heuristics": [
+    {
+      "id": "ro-approx",
+      "statement": "The 37-round SHA-256 compression with standard IV and the chosen message domain produces outputs sufficiently close to uniform that the birthday collision probability and expected hash-table operation counts hold to within the claimed overhead.",
+      "role": "score-critical",
+      "scope": "Analysis of collision detection success probability and expected work for the sampling-and-hash-table algorithm.",
+      "extrapolation": "Standard random-oracle style analysis applied to reduced-round SHA-256; no full random oracle is assumed, only near-uniformity for the purpose of counting collisions among 2^128 samples.",
+      "evidence_ids": [
+        "proof:1"
+      ],
+      "limitations": "This is a heuristic common in reduced-round collision cryptanalysis. It does not constitute a proof of uniformity. If the actual output distribution has significant biases that affect the collision count, the success probability could be lower; the bound is presented as plausible for exploratory review."
+    }
+  ]
 }
