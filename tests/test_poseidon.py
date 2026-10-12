@@ -117,6 +117,19 @@ class PoseidonDomainTests(unittest.TestCase):
     def encode(self, first: int, second: int) -> bytes:
         return first.to_bytes(32, "little") + second.to_bytes(32, "little")
 
+    def test_domain_failures_use_the_dedicated_error_but_stay_value_errors(self):
+        canonical = self.encode(1, 2)
+        shifted = self.encode(1 + poseidon.MODULUS, 2)
+        for data in (shifted, bytes(63), b"", "x" * 64):
+            with self.subTest(case=type(data).__name__ + str(len(data))):
+                with self.assertRaises(poseidon.MessageDomainError):
+                    poseidon.decode_message(data)
+        self.assertTrue(issubclass(poseidon.MessageDomainError, ValueError))
+        # A configuration fault is a plain ValueError, not a domain failure.
+        with self.assertRaises(ValueError) as caught:
+            digest(canonical, "poseidon", 0)
+        self.assertNotIsInstance(caught.exception, poseidon.MessageDomainError)
+
     def test_non_canonical_field_elements_are_rejected(self):
         modulus = poseidon.MODULUS
         for offending in (modulus, modulus + 1, (1 << 256) - 1):
@@ -263,6 +276,102 @@ class PoseidonTrackTests(unittest.TestCase):
                 self.assertIn("64 bytes", profile["message_domain"])
                 self.assertIn("x + p", profile["message_domain"])
                 self.assertEqual(profile["reference_implementation"], "verifier/poseidon.py:poseidon")
+
+
+class PoseidonCertificateTests(unittest.TestCase):
+    """The verifier itself must refuse a non-canonical witness."""
+
+    def build(self, directory, message_a, message_b):
+        from verifier.frontier_tracks import get_frontier_track
+        from verifier.io import atomic_write_json
+
+        track = get_frontier_track("poseidon-r1-exploratory")
+        candidate = Path(directory) / "candidate"
+        (candidate / "certificates").mkdir(parents=True)
+        claim = track.draft_claim()
+        claim["submission_state"] = "ready"
+        atomic_write_json(candidate / "claim.json", claim)
+        (candidate / "proof.md").write_text("# Fixture\nNot a cryptanalytic proof.\n")
+        expected = digest(message_a, "poseidon", 1).hex()
+        atomic_write_json(candidate / "certificates" / "manifest.json", {
+            "schema_version": 2,
+            "certificates": [{
+                "id": "witness-1",
+                "type": "hash-collision-witness-v2",
+                "target_profile": track.profile_id,
+                "message_a": "certificates/a.bin",
+                "message_b": "certificates/b.bin",
+                "expected_digest": expected,
+            }],
+        })
+        (candidate / "certificates" / "a.bin").write_bytes(message_a)
+        (candidate / "certificates" / "b.bin").write_bytes(message_b)
+        return candidate, track
+
+    def test_a_shifted_encoding_is_refused_as_a_collision(self):
+        import tempfile
+
+        from verifier.certificates import verify_certificates
+        from verifier.errors import VerificationError
+        from verifier import poseidon as module
+
+        canonical = (1).to_bytes(32, "little") + (2).to_bytes(32, "little")
+        shifted = (1 + module.MODULUS).to_bytes(32, "little") + (2).to_bytes(32, "little")
+        with tempfile.TemporaryDirectory() as directory:
+            candidate, track = self.build(directory, canonical, shifted)
+            with self.assertRaisesRegex(VerificationError, "message domain"):
+                verify_certificates(candidate, track=track)
+
+    def test_a_wrong_length_witness_is_refused(self):
+        import tempfile
+
+        from verifier.certificates import verify_certificates
+        from verifier.errors import VerificationError
+
+        canonical = (1).to_bytes(32, "little") + (2).to_bytes(32, "little")
+        with tempfile.TemporaryDirectory() as directory:
+            candidate, track = self.build(directory, canonical, bytes(63))
+            with self.assertRaisesRegex(VerificationError, "message domain"):
+                verify_certificates(candidate, track=track)
+
+    def test_a_configuration_error_is_not_relabeled_as_a_domain_error(self):
+        import tempfile
+
+        from verifier.certificates import verify_certificates
+        from verifier.errors import VerificationError
+
+        canonical = (1).to_bytes(32, "little") + (2).to_bytes(32, "little")
+        other = (3).to_bytes(32, "little") + (4).to_bytes(32, "little")
+        with tempfile.TemporaryDirectory() as directory:
+            candidate, track = self.build(directory, canonical, other)
+            # An unsupported round count is a harness configuration fault, not a
+            # rejected witness, so it must not surface as a domain failure.
+            with patch(
+                "verifier.certificates.digest",
+                side_effect=ValueError("unsupported algorithm or round count"),
+            ):
+                with self.assertRaises(ValueError) as caught:
+                    verify_certificates(candidate, track=track)
+            self.assertNotIsInstance(caught.exception, VerificationError)
+            self.assertNotIn("message domain", str(caught.exception))
+
+    def test_a_genuine_equal_digest_pair_still_verifies(self):
+        import tempfile
+
+        from verifier.certificates import verify_certificates
+
+        # Not a real collision: the same digest is asserted for two distinct
+        # canonical messages only to confirm the gate above is not blanket.
+        canonical = (1).to_bytes(32, "little") + (2).to_bytes(32, "little")
+        other = (3).to_bytes(32, "little") + (4).to_bytes(32, "little")
+        with tempfile.TemporaryDirectory() as directory:
+            candidate, track = self.build(directory, canonical, other)
+            with patch(
+                "verifier.certificates.digest",
+                return_value=bytes.fromhex(digest(canonical, "poseidon", 1).hex()),
+            ):
+                report = verify_certificates(candidate, track=track)
+            self.assertEqual(report["certificates"][0]["status"], "verified")
 
 
 class PoseidonReferenceCostTests(unittest.TestCase):

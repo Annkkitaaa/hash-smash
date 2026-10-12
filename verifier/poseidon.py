@@ -258,6 +258,15 @@ MDS = (
 )
 
 
+class MessageDomainError(ValueError):
+    """A message is outside the target domain: wrong length or non-canonical.
+
+    Distinct from a configuration error such as an unsupported round count, so
+    a caller can report a rejected witness without relabeling a harness bug.
+    Subclasses ValueError so existing callers keep working.
+    """
+
+
 def _validate_rounds(rounds: int) -> None:
     if type(rounds) is not int or not 1 <= rounds <= TOTAL_ROUNDS:
         raise ValueError("unsupported Poseidon prefix round count")
@@ -314,15 +323,15 @@ def permutation(state, *, rounds: int = TOTAL_ROUNDS) -> list[int]:
 def decode_message(data: bytes) -> list[int]:
     """Reject anything but two canonical little-endian field elements."""
     if not isinstance(data, bytes):
-        raise ValueError("Poseidon message must be bytes")
+        raise MessageDomainError("Poseidon message must be bytes")
     if len(data) != MESSAGE_BYTES:
-        raise ValueError(f"Poseidon message must be exactly {MESSAGE_BYTES} bytes")
+        raise MessageDomainError(f"Poseidon message must be exactly {MESSAGE_BYTES} bytes")
     elements = []
     for start in range(0, MESSAGE_BYTES, ELEMENT_BYTES):
         element = int.from_bytes(data[start:start + ELEMENT_BYTES], "little")
         if element >= MODULUS:
             # x and x + p would otherwise be a trivial collision.
-            raise ValueError("Poseidon message element is not a canonical field element")
+            raise MessageDomainError("Poseidon message element is not a canonical field element")
         elements.append(element)
     return elements
 
